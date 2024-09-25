@@ -1,0 +1,154 @@
+############################################################
+
+# Title: Clean - Pay Equity
+# Author: Emma Broadnax
+# Last Updated: 
+# Notes: Cleans Pay Equity Dataframes
+# Warnings: null global grade is currently corrected manually
+
+# change from work location to state - AZRA employees are spread
+# look at geozone
+# try adding talent segments
+# try including AZRA department for grouping (break apart the claims people in particular)
+
+############################################################
+
+####################### Clean Ledger Input #######################
+
+df_ledger <- in_ledger %>% 
+  # remove temporary employees
+  # remove officers
+  # remove interns
+  filter(reg_temp == "R" &
+           officer == "N" &
+           pay_band_grade != "Z" &
+           co_descr %in% company.list) %>% 
+  # adjust pay bands for geographic differentials
+  mutate(dr_count = replace_na(dr_count, 0),
+         aip_target_percent = replace_na(aip_target_percent, 0),
+         age_group = as.factor(cut(age, breaks = age_groups, include.lowest = TRUE)),
+         target_aip = aip_target_percent * annual_rt,
+         hourly_rate = annual_rt/(std_hrs_wk*52),
+         log_hourly_rate = log(hourly_rate),
+         hourly_ttdc = (annual_rt + target_aip)/(std_hrs_wk * 52)) %>%
+  # convert column types
+  mutate(job_code = as.factor(job_code),
+         empl_class = as.factor(empl_class)) %>% 
+  dplyr::select(id,
+         name,
+         job_code,
+         dr_count,
+         people_mgr,
+         empl_class,
+         pay_band_grade,
+         fte,
+         std_hrs_wk,
+         yrs_of_svc,
+         age,
+         age_group,
+         annual_rt,
+         target_aip,
+         hourly_rate,
+         log_hourly_rate,
+         hourly_ttdc,
+         aip_target_percent,
+         x2nd_lvl_mgr,
+         gender,
+         location_code,
+         #work_state,
+         home_state,
+         business_unit,
+         department_description,
+         co_descr)
+
+####################### Clean Job Codes #######################
+
+df_jobs <- in_jobs %>% 
+  # filter to current job record
+  filter(status == "A" &
+           end_date == "12/31/9999") %>% 
+  mutate(cln_global_grade = str_remove(custom_global_pay_grade, "AGS ")) %>% 
+  mutate(cln_global_grade = replace_na(cln_global_grade, "Not Applicable")) %>% 
+  rename(job_title = name) %>% 
+  dplyr::select(external_code, job_title, cln_global_grade)
+
+####################### Join: Job Code #######################
+
+df_ledger_master <- df_ledger %>% 
+  left_join(df_jobs, by = c("job_code" = "external_code"))
+
+####################### Test Files #######################
+
+
+
+  
+
+
+####################### Clean Data - Whole Company #######################
+
+# # Clean data
+# data <- data %>% 
+#   dplyr::rename_all(~ gsub(" ", "_", .)) %>% # Rename columns
+#   # Split out Distribution ELG by salespeople and non-sales
+#   dplyr::mutate(ELG = case_when(ELG == 'Distribution' & Empl_Class == 'Sales' ~ 'Distribution (Sales Only)',
+#                          ELG == 'Distribution' & Empl_Class == 'Employee' ~ 'Distribution (Non-sales)',
+#                          TRUE ~ ELG)) %>% 
+#   dplyr::filter(Officer == 'N') %>% # Filter out officers
+#   dplyr::filter(!is.na(Global_Grade)) %>%  # currently all AIM officers
+#   dplyr::filter(Global_Grade != "AGS 14") %>%   # AIM Officers
+#   dplyr::filter(Global_Grade != "AGS 13") %>%   # AIM Officers
+#   # correct null global grades
+#   dplyr::mutate(hourly_ttdc = TTDC_1.0_FTE/(Hours*52),
+#          calibration_category = case_when(calibration_category == "UNRATED" ~ "unrated",
+#                                           is.na(calibration_category) ~ "At =",
+#                                           TRUE ~ calibration_category),
+#          cln_business_unit = case_when(Business_Unit == "Compliance-NY" ~ "Legal & Compliance",
+#                                        Business_Unit == "Compliance" ~ "Legal & Compliance",
+#                                        Business_Unit == "Legal" ~ "Legal & Compliance",
+#                                        Business_Unit == "Executive" ~ "Legal & Compliance",
+#                                        Business_Unit == "Life Distribution Unit" ~ "Distribution", 
+#                                        Business_Unit == "Information Security" ~ "Technology Unit",
+#                                        Business_Unit == "Real Estate" ~ "People & Culture Unit",
+#                                        Business_Unit == "ALFS" ~ "Distribution",
+#                                        Business_Unit == "ETF Distribution Unit" ~ "Distribution",
+#                                        Business_Unit == "FMO Distribution-Annuity" ~ "Distribution", 
+#                                        Business_Unit == "Life Distribution Unit" ~ "Distribution", 
+#                                        TRUE ~ Business_Unit),
+#          cln_global_grade = str_extract(Global_Grade, "\\d+"),
+#          is_below_minus = if_else(calibration_category == "Below -", 1, 0),
+#          is_over_65 = if_else(Age >= 65, 1, 0),
+#          is_people_mgr = if_else(People_Mgr == "Y", 1, 0),
+#          is_vir_loc = if_else(Location_Code == "VIR_ZZZ", 1, 0),
+#          grp_age = cut(Age, breaks = age_groups, include_lowest = TRUE),
+#          log_hourly_rate = log(Hrly_Rate)) 
+#   
+# 
+# # Relevel categorical variables, assigning a reference value
+# data$Business_Unit <- relevel(factor(data$Business_Unit), ref = "Enterprise Operations")
+# data$cln_business_unit <- relevel(factor(data$cln_business_unit), ref = "Enterprise Operations")
+# data$ELG <- relevel(factor(data$ELG), ref = "COO")
+# data$Empl_Class <- relevel(factor(data$Empl_Class), ref = "M")
+# data$Gender <- relevel(factor(data$Gender), ref = "F")
+# data$Location_Code <- relevel(factor(data$Location_Code), ref = "MIN_001")
+# data$People_Mgr <- relevel(factor(data$People_Mgr), ref = "N")
+# data$grp_age <- relevel(factor(data$grp_age), ref = "(0,20]")
+
+
+####################### Clean Data - ELG Areas #######################
+
+# separate ELG's by business units
+# count number of business units in each ELG area
+# elg_groups <- data %>% 
+#   group_by(ELG) %>% 
+#   summarise(n_bu = n_distinct(Business_Unit))
+
+# Define list of ELG Areas with no other business units
+# list_single_bu <- elg_groups %>% 
+#   filter(n_bu == 1) %>% 
+#   pull(ELG)
+# 
+# # Define list of ELG Areas with more than one business unit
+# list_mult_bu <- elg_groups %>% 
+#   filter(n_bu > 1) %>% 
+#   pull(ELG)
+

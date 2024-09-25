@@ -1,0 +1,52 @@
+############################################################
+
+# Title: Clean - Pay Equity
+# Author: Emma Broadnax
+# Last Updated: 09/17/2024
+# Notes: Cleans Pay Equity Dataframes
+# Warnings: null global grade is currently corrected manually
+
+############################################################
+
+####################### Clean Data #######################
+
+# filter ledger to AZL employees
+df_ledger_master_azl <- df_ledger_master %>% 
+  filter(co_descr == "Allianz Life Insurance Company")
+
+# clean executive review
+df_exec_rev <- in_exec_rev %>% 
+  filter(!is.na(employee_id)) %>% 
+  mutate(employee_id = as.character(employee_id),
+         calibration_category = tolower(calibration_category)) %>% 
+  select(employee_id, calibration_category)
+
+####################### Join: Executive Review #######################
+
+# create a master file
+df_master_azl <- df_ledger_master_azl %>%
+  # join ledger file to executive review
+  left_join(df_exec_rev, by = c("id" = "employee_id")) %>% 
+  # join elg member mapping
+  inner_join(in_mapping, by = c("business_unit"))
+
+####################### Test Files #######################
+
+df_exec_rev %>% filter(is.na(calibration_category))
+
+df_master_azl %>% filter(is.na(calibration_category)) %>% nrow(.)
+
+####################### Clean Data: Job Architecture #######################
+
+
+# in_data_job_arch %<>% 
+#   filter(is.na(include))
+# 
+# # Join pay data with business unit mappings
+# data <- in_data %>%
+#   #data <- in_data_job_arch %>%
+#   # those not included in the mapping are GEA employees
+#   #left_join(in_exec_rev, by = c("id" = "employee_id")) %>% 
+#   #left_join(in_data, by = c("id" = "Empls")) %>% 
+#   left_join(in_exec_rev, by = c("Empls" = "employee_id")) %>% 
+#   inner_join(in_mapping, by = c("Business Unit" = "Business Unit"))

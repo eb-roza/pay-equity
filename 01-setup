@@ -1,0 +1,115 @@
+############################################################
+
+# Title: Setup - Pay Equity
+# Author: Emma Broadnax
+# Last Updated: 09/17/2024
+# Notes: Cleans Pay Equity Dataframes
+# Warnings:
+
+############################################################
+
+####################### Load Libraries #######################
+
+# Dependencies
+library(openxlsx)
+library(readxl)
+library(tidyverse)
+library(tidymodels)
+library(magrittr)
+library(broom)
+#library(stargazer)
+library(ggplot2)
+library(car)
+library(scales)
+library(kableExtra)
+library(janitor)
+
+####################### Set Constants #######################
+
+na_list = c("NA", "na")
+
+company.list = c("AZOA Services Corporation", "Allianz Life Insurance Company", "Allianz Reinsurance America Inc")
+
+# file locations
+# manual file containing ELG member to business unit mappings
+p.azl <- "C:\\Users\\azl698z\\Documents\\Code\\pay-equity\\2024 Pay Equity Before - 20240401.xlsx"
+p.executive.review <- "C:\\Users\\azl698z\\Documents\\Code\\pay-equity\\All-Company Executive Review 02.20.2024-upd.xls"
+p.azra.executive.review <- "C:\\Users\\azl698z\\OneDrive - Allianz\\02 Comp Mgmt\\01 Year End Processes\\2023-2024 Annual Cycle\\Compensation BU Summary\\2024 Business Unit Summary - AZRA Roll-up.xlsx"
+p.job.code.list <- "C:\\Users\\azl698z\\OneDrive - Allianz\\02 Comp Mgmt\\Job Code Reports\\2024\\Job_Code_Report_20240903.xlsx"
+p.ledger <- "C:\\Users\\azl698z\\OneDrive - Allianz\\20 Emma Files\\Data\\people_ledger\\PeopleLedger Confidential Month End 2024-09-01.xlsx"
+p.mapping <- "Mapping.xlsx"
+
+
+# global grade groupings
+# officers
+fourteen_plus <- c("AGS 14", "AGS 15", "AGS 16", "AGS 17", "AGS 18", "AGS 19", "AGS 20")
+# azl officers
+thir_plus <- c("AGS 13", "AGS 14", "AGS 15", "AGS 16", "AGS 17", "AGS 18", "AGS 19", "AGS 20")
+five_less <- c("AGS 4", "AGS 5")
+sev_less <- c("AGS 4", "AGS 5", "AGS 6", "AGS 7")
+
+age_groups <- c(0, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 100)
+
+####################### Read Files #######################
+
+# AZL Data
+in_data <- read.xlsx(p.azl)
+
+# executive review file - from employee central
+in_exec_rev <- read_xls(p.executive.review) %>% 
+  clean_names()
+
+# executive review file - from employee central
+in_exec_rev_azra <- read.xlsx(p.azra.executive.review,
+                              sheet = "EC Data",
+                              startRow = 2) %>% 
+  clean_names()
+
+in_jobs <- read.xlsx(p.job.code.list) %>% 
+  clean_names()
+
+# people ledger (for AZRA)
+in_ledger <- read.xlsx(p.ledger, na.strings = na_list, detectDates = TRUE) %>% 
+  clean_names() 
+  
+
+# job architecture proposed mappings
+# in_data_job_arch <- read.xlsx("A:\\11 Core Projects and Programs\\Comp and Job Project\\Job family_Sub-family refresh\\Family Sub Family Mapping Master v4.0.xlsx",
+#                               sheet = "Person Mapping",
+#                               startRow = 4) %>% 
+#   janitor::clean_names()
+
+# elg member mappings
+in_mapping <- read.xlsx(p.mapping) %>% 
+  clean_names()
+
+
+####################### Define Functions #######################
+
+
+# Get GenderM coefficient function
+# Parameters
+# ----------
+# lm_obj : A model object of the pay equity regression. This must contain Gender as a variable with F as the reference.
+# 
+# Returns
+# -------
+# Numeric value of the GenderM coefficient in the model object.
+
+get_pct <- function(lm_obj){
+  as.numeric((exp(coef(lm_obj)[["GenderM"]]) - 1))
+}
+
+# Get GenderM p-value function
+# Parameters
+# ----------
+# lm_obj : A model object of the pay equity regression. This must contain Gender as a variable with F as the reference.
+# 
+# Returns
+# -------
+# Numeric value of the GenderM p-value in the model object.
+
+get_pvalue <- function(lm_obj){
+  as.numeric(summary(lm_obj)$coefficients[,4]["GenderM"])
+}
+
